@@ -1,5 +1,6 @@
 import { Metadata } from 'next'
 import '../[lang]/globals.css'
+import { SpeedInsights } from '@vercel/speed-insights/next'
 
 export const metadata: Metadata = {
     title: 'Admin - GoodLunch',
@@ -15,6 +16,7 @@ export default function AdminLayout({
         <html lang="en">
             <body className="bg-gray-50 text-gray-900">
                 {children}
+                <SpeedInsights />
             </body>
         </html>
     )
