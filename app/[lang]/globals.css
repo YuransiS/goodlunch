@@ -1,0 +1,19 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: #F9FAFB;
+  overflow-x: hidden; /* ЭТО ВАЖНО: убирает белую полосу справа */
+  width: 100%;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Фикс для мобилок, чтобы кнопки не нажимались сами при скролле */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
