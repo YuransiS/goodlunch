@@ -10,6 +10,7 @@ export default function AdminPage() {
     const [orders, setOrders] = useState<any[]>([])
     const [error, setError] = useState('')
     const [isLoading, setIsLoading] = useState(false)
+    const [isRefreshing, setIsRefreshing] = useState(false)
 
     // Clear error on input change
     useEffect(() => {
@@ -44,6 +45,7 @@ export default function AdminPage() {
     }
 
     const fetchOrders = async (header = authHeader) => {
+        setIsRefreshing(true)
         try {
             const res = await fetch('/api/admin/orders', {
                 headers: { 'Authorization': header }
@@ -54,6 +56,28 @@ export default function AdminPage() {
                 if (res.status === 401) {
                     setIsAuthenticated(false);
                 }
+            }
+        } catch (e) {
+            console.error(e)
+        } finally {
+            setIsRefreshing(false)
+        }
+    }
+
+    const deleteOrder = async (id: string) => {
+        if (!window.confirm('Ви впевнені, що хочете назавжди видалити це замовлення?')) return;
+        
+        try {
+            const res = await fetch('/api/admin/orders', {
+                method: 'DELETE',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': authHeader
+                 },
+                body: JSON.stringify({ id })
+            })
+            if (res.ok) {
+                setOrders(orders.filter((o: any) => o.id !== id))
             }
         } catch (e) {
             console.error(e)
@@ -176,9 +200,10 @@ export default function AdminPage() {
                     </div>
                     <button
                         onClick={() => fetchOrders()}
-                        className="px-5 py-2.5 bg-white border border-zinc-200 rounded-xl shadow-[0_2px_10px_rgba(0,0,0,0.04)] hover:shadow-[0_4px_20px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 text-sm font-semibold text-zinc-700 transition-all flex items-center gap-2"
+                        disabled={isRefreshing}
+                        className="px-5 py-2.5 bg-white border border-zinc-200 rounded-xl shadow-[0_2px_10px_rgba(0,0,0,0.04)] hover:shadow-[0_4px_20px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 text-sm font-semibold text-zinc-700 transition-all flex items-center gap-2 disabled:opacity-75 disabled:hover:translate-y-0 disabled:cursor-not-allowed"
                     >
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                        <svg className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
                         Оновити дані
                     </button>
                 </div>
@@ -218,6 +243,7 @@ export default function AdminPage() {
                                     <th className="px-6 py-5 text-left text-xs font-bold text-zinc-500 uppercase tracking-widest">Адреса</th>
                                     <th className="px-6 py-5 text-left text-xs font-bold text-zinc-500 uppercase tracking-widest">Замовлення</th>
                                     <th className="px-6 py-5 text-left text-xs font-bold text-zinc-500 uppercase tracking-widest">Статус</th>
+                                    <th className="px-6 py-5 text-left text-xs font-bold text-zinc-500 uppercase tracking-widest">Дії</th>
                                 </tr>
                             </thead>
                             <tbody className="bg-white divide-y divide-zinc-100">
@@ -300,11 +326,20 @@ export default function AdminPage() {
                                                 </div>
                                             </div>
                                         </td>
+                                        <td className="px-6 py-5 whitespace-nowrap align-middle">
+                                            <button 
+                                                onClick={() => deleteOrder(order.id)}
+                                                className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                                                title="Видалити"
+                                            >
+                                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                            </button>
+                                        </td>
                                     </motion.tr>
                                 ))}
                                 {orders.length === 0 && (
                                     <tr>
-                                        <td colSpan={5} className="px-6 py-20 text-center">
+                                        <td colSpan={6} className="px-6 py-20 text-center">
                                             <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-zinc-100 mb-4">
                                                 <svg className="w-8 h-8 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" /></svg>
                                             </div>

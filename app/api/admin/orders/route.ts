@@ -53,3 +53,25 @@ export async function PUT(request: Request) {
         return NextResponse.json({ error: 'Failed to update order' }, { status: 500 });
     }
 }
+
+export async function DELETE(request: Request) {
+    if (!checkAuth(request)) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    try {
+        const { id } = await request.json();
+
+        const { error } = await supabase
+            .from('orders')
+            .delete()
+            .eq('id', id);
+
+        if (error) throw error;
+
+        return NextResponse.json({ success: true });
+    } catch (error) {
+        console.error('Error deleting order in Supabase:', error);
+        return NextResponse.json({ error: 'Failed to delete order' }, { status: 500 });
+    }
+}

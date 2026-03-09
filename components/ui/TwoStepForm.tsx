@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 export function TwoStepForm({ dict, defaultData = {}, onSuccessAction }: { dict: any, defaultData?: any, onSuccessAction?: () => void }) {
     const [step, setStep] = useState(1)
     const [isSubmitting, setIsSubmitting] = useState(false)
+    const [orderId, setOrderId] = useState<string | null>(null)
 
     const [formData, setFormData] = useState({
         name: '',
@@ -28,6 +29,10 @@ export function TwoStepForm({ dict, defaultData = {}, onSuccessAction }: { dict:
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ ...formData, ...defaultData, step: 1 })
             })
+            const data = await res.json()
+            if (data.orderId) {
+                setOrderId(data.orderId)
+            }
             // Proceed to Step 2 regardless for demo purposes if API fails, but strictly after wait
             setStep(2)
         } catch (err) {
@@ -44,7 +49,7 @@ export function TwoStepForm({ dict, defaultData = {}, onSuccessAction }: { dict:
             await fetch('/api/orders', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ...formData, ...defaultData, step: 2 })
+                body: JSON.stringify({ ...formData, ...defaultData, id: orderId, step: 2 })
             })
             if (typeof window !== 'undefined' && (window as any).fbq) {
                 (window as any).fbq('track', 'Lead')
