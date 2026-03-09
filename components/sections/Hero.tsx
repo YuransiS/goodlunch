@@ -76,8 +76,9 @@ export default function Hero({ lang, dict }: { lang: string, dict: any }) {
               src="https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=800&q=80"
               alt="Delicious food preview"
               fill
+              loading="lazy"
               className="object-contain lg:object-cover drop-shadow-[0_20px_50px_rgba(0,0,0,0.3)] rounded-full lg:rounded-[100px]"
-              priority={true}
+              priority={false}
               sizes="(max-width: 768px) 320px, 50vw"
             />
           </div>

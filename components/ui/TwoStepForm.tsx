@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 
-export function TwoStepForm({ dict, defaultData = {}, onSuccess }: { dict: any, defaultData?: any, onSuccess?: () => void }) {
+export function TwoStepForm({ dict, defaultData = {}, onSuccessAction }: { dict: any, defaultData?: any, onSuccessAction?: () => void }) {
     const [step, setStep] = useState(1)
     const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -46,9 +46,12 @@ export function TwoStepForm({ dict, defaultData = {}, onSuccess }: { dict: any, 
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ ...formData, ...defaultData, step: 2 })
             })
-            if (onSuccess) onSuccess()
+            if (typeof window !== 'undefined' && (window as any).fbq) {
+                (window as any).fbq('track', 'Lead')
+            }
+            if (onSuccessAction) onSuccessAction()
         } catch (err) {
-            if (onSuccess) onSuccess()
+            if (onSuccessAction) onSuccessAction()
         } finally {
             setIsSubmitting(false)
         }

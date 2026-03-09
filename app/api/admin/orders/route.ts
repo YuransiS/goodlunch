@@ -1,50 +1,55 @@
 import { NextResponse } from 'next/server';
-import fs from 'fs';
-import path from 'path';
+import { supabase } from '@/lib/supabaseClient';
 
-const dataFilePath = path.join(process.cwd(), 'data', 'orders.json');
+const checkAuth = (request: Request) => {
+    const authHeader = request.headers.get('Authorization');
+    if (!authHeader || !authHeader.startsWith('Basic ')) return false;
+    
+    const base64Credentials = authHeader.split(' ')[1];
+    const credentials = Buffer.from(base64Credentials, 'base64').toString('ascii');
+    const [login, password] = credentials.split(':');
+    
+    return login === process.env.ADMIN_LOGIN && password === process.env.ADMIN_PASSWORD;
+};
 
-export async function GET() {
+export async function GET(request: Request) {
+    if (!checkAuth(request)) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     try {
-        if (!fs.existsSync(dataFilePath)) {
-            return NextResponse.json([]);
-        }
-        const fileContent = fs.readFileSync(dataFilePath, 'utf-8');
-        const orders = fileContent ? JSON.parse(fileContent) : [];
+        const { data, error } = await supabase
+            .from('orders')
+            .select('*')
+            .order('createdAt', { ascending: false });
 
-        // Sort newest first
-        orders.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        if (error) throw error;
 
-        return NextResponse.json(orders);
+        return NextResponse.json(data);
     } catch (error) {
-        console.error('Error reading orders:', error);
+        console.error('Error reading orders from Supabase:', error);
         return NextResponse.json({ error: 'Failed to read orders' }, { status: 500 });
     }
 }
 
 export async function PUT(request: Request) {
+    if (!checkAuth(request)) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     try {
         const { id, status } = await request.json();
 
-        if (!fs.existsSync(dataFilePath)) {
-            return NextResponse.json({ error: 'No orders found' }, { status: 404 });
-        }
+        const { error } = await supabase
+            .from('orders')
+            .update({ status })
+            .eq('id', id);
 
-        const fileContent = fs.readFileSync(dataFilePath, 'utf-8');
-        let orders = fileContent ? JSON.parse(fileContent) : [];
-
-        const orderIndex = orders.findIndex((o: any) => o.id === id);
-        if (orderIndex === -1) {
-            return NextResponse.json({ error: 'Order not found' }, { status: 404 });
-        }
-
-        orders[orderIndex].status = status;
-
-        fs.writeFileSync(dataFilePath, JSON.stringify(orders, null, 2));
+        if (error) throw error;
 
         return NextResponse.json({ success: true });
     } catch (error) {
-        console.error('Error updating order:', error);
+        console.error('Error updating order in Supabase:', error);
         return NextResponse.json({ error: 'Failed to update order' }, { status: 500 });
     }
 }

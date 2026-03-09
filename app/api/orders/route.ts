@@ -1,38 +1,35 @@
 import { NextResponse } from 'next/server';
-import fs from 'fs';
-import path from 'path';
-
-const dataFilePath = path.join(process.cwd(), 'data', 'orders.json');
+import { supabase } from '@/lib/supabaseClient';
 
 export async function POST(request: Request) {
     try {
         const body = await request.json();
 
-        // Make sure data dir exists
-        const dataDir = path.dirname(dataFilePath);
-        if (!fs.existsSync(dataDir)) {
-            fs.mkdirSync(dataDir, { recursive: true });
-        }
-
-        // Read existing orders
-        let orders = [];
-        if (fs.existsSync(dataFilePath)) {
-            const fileContent = fs.readFileSync(dataFilePath, 'utf-8');
-            if (fileContent) {
-                orders = JSON.parse(fileContent);
-            }
-        }
-
         const newOrder = {
             id: Date.now().toString(),
-            createdAt: new Date().toISOString(),
+            name: body.name || '',
+            phone: body.phone || '',
+            messenger: body.messenger || '',
+            street: body.street || '',
+            house: body.house || '',
+            floor: body.floor || '',
+            apt: body.apt || '',
+            intercom: body.intercom || '',
+            deliveryDay: body.deliveryDay || '',
+            package: body.package || '',
+            calories: parseInt(body.calories) || 0,
+            price: body.price || '',
             status: 'New',
-            ...body
         };
 
-        orders.push(newOrder);
+        const { error } = await supabase
+            .from('orders')
+            .insert([newOrder]);
 
-        fs.writeFileSync(dataFilePath, JSON.stringify(orders, null, 2));
+        if (error) {
+            console.error('Supabase insert error:', error);
+            throw error;
+        }
 
         return NextResponse.json({ success: true, orderId: newOrder.id });
     } catch (error) {

@@ -76,7 +76,7 @@ export function OrderModal({
                                 <TwoStepForm
                                     dict={dict}
                                     defaultData={{ package: selectedPackage, calories: selectedCalories, price }}
-                                    onSuccess={() => setIsSuccess(true)}
+                                    onSuccessAction={() => setIsSuccess(true)}
                                 />
                             </>
                         )}
