@@ -2,12 +2,14 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { week1Menu, week2Menu } from '@/lib/menuData'
+import { menuTranslations } from '@/lib/menuTranslations'
 
 // ─────────────────── Types ───────────────────
 type SidebarSection = 'orders' | 'menu'
+type Language = 'pl' | 'ua' | 'ru' | 'en'
 
-const STORAGE_KEY_W1 = 'admin_menu_week1'
-const STORAGE_KEY_W2 = 'admin_menu_week2'
+const STORAGE_KEY_W1_TRANSLATED = 'admin_menu_week1_multilang'
+const STORAGE_KEY_W2_TRANSLATED = 'admin_menu_week2_multilang'
 
 const DAY_NAMES = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Нд']
 const DAY_NAMES_FULL = ['Понеділок', 'Вівторок', 'Середа', 'Четвер', 'П\'ятниця', 'Субота', 'Неділя']
@@ -18,136 +20,211 @@ const DISH_TYPE_LABELS = {
     main2: '🥘 Основне 2',
 }
 
+const LANGUAGES: { id: Language; label: string; flag: string }[] = [
+    { id: 'pl', label: 'Polski', flag: '🇵🇱' },
+    { id: 'ua', label: 'Українська', flag: '🇺🇦' },
+    { id: 'ru', label: 'Русский', flag: '🇷🇺' },
+    { id: 'en', label: 'English', flag: '🇬🇧' },
+]
+
+// ─────────────────── Helpers ───────────────────
+function initMultilangMenu(defaultMenu: any[]) {
+    return defaultMenu.map(day => ({
+        ...day,
+        dishes: day.dishes.map((dish: any) => {
+            // Try to find translations in our dictionary
+            const dictEntry = menuTranslations[dish.title]
+            return {
+                type: dish.type,
+                titles: {
+                    pl: dictEntry?.pl || dish.title,
+                    ua: dictEntry?.ua || dish.title,
+                    ru: dictEntry?.ru || dish.title,
+                    en: dictEntry?.en || dish.title,
+                }
+            }
+        })
+    }))
+}
+
 function loadMenuFromStorage(weekKey: string, defaultMenu: any[]) {
-    if (typeof window === 'undefined') return defaultMenu
+    if (typeof window === 'undefined') return initMultilangMenu(defaultMenu)
     try {
         const stored = localStorage.getItem(weekKey)
         if (stored) return JSON.parse(stored)
     } catch {}
-    return defaultMenu
+    return initMultilangMenu(defaultMenu)
 }
 
 // ─────────────────── Menu Editor Section ───────────────────
 function MenuEditorSection() {
     const [weekNum, setWeekNum] = useState<1 | 2>(1)
-    const [selectedDay, setSelectedDay] = useState(0) // 0 = Monday
-    const [w1, setW1] = useState(() => loadMenuFromStorage(STORAGE_KEY_W1, JSON.parse(JSON.stringify(week1Menu))))
-    const [w2, setW2] = useState(() => loadMenuFromStorage(STORAGE_KEY_W2, JSON.parse(JSON.stringify(week2Menu))))
+    const [selectedDay, setSelectedDay] = useState(0)
+    const [activeLang, setActiveLang] = useState<Language>('ua')
+    const [w1, setW1] = useState(() => loadMenuFromStorage(STORAGE_KEY_W1_TRANSLATED, week1Menu))
+    const [w2, setW2] = useState(() => loadMenuFromStorage(STORAGE_KEY_W2_TRANSLATED, week2Menu))
     const [saved, setSaved] = useState(false)
 
     const currentMenu = weekNum === 1 ? w1 : w2
     const setCurrentMenu = weekNum === 1 ? setW1 : setW2
-
     const currentDay = currentMenu[selectedDay]
 
-    const handleDishChange = (dishIndex: number, newTitle: string) => {
+    const handleDishChange = (dishIndex: number, lang: Language, newVal: string) => {
         const updated = currentMenu.map((day: any, dIdx: number) => {
             if (dIdx !== selectedDay) return day
-            return {
-                ...day,
-                dishes: day.dishes.map((d: any, i: number) =>
-                    i === dishIndex ? { ...d, title: newTitle } : d
-                )
+            const newDishes = [...day.dishes]
+            newDishes[dishIndex] = {
+                ...newDishes[dishIndex],
+                titles: { ...newDishes[dishIndex].titles, [lang]: newVal }
             }
+            return { ...day, dishes: newDishes }
         })
         setCurrentMenu(updated)
     }
 
+    const autoTranslate = (dishIndex: number) => {
+        const dish = currentDay.dishes[dishIndex]
+        const sourceTitle = dish.titles[activeLang] || dish.titles.pl
+        
+        // Find in dictionary
+        let foundEntry = null
+        for (const key in menuTranslations) {
+            const entry = menuTranslations[key]
+            if (Object.values(entry).some(v => v.toLowerCase() === sourceTitle.toLowerCase())) {
+                foundEntry = entry
+                break
+            }
+        }
+
+        if (foundEntry) {
+            const updated = currentMenu.map((day: any, dIdx: number) => {
+                if (dIdx !== selectedDay) return day
+                const newDishes = [...day.dishes]
+                newDishes[dishIndex] = {
+                    ...newDishes[dishIndex],
+                    titles: {
+                        pl: foundEntry.pl,
+                        ua: foundEntry.ua,
+                        ru: foundEntry.ru,
+                        en: foundEntry.en,
+                    }
+                }
+                return { ...day, dishes: newDishes }
+            })
+            setCurrentMenu(updated)
+        } else {
+            alert('Переклад для цієї страви не знайдено в базі даних.')
+        }
+    }
+
     const handleSave = () => {
-        const key = weekNum === 1 ? STORAGE_KEY_W1 : STORAGE_KEY_W2
+        const key = weekNum === 1 ? STORAGE_KEY_W1_TRANSLATED : STORAGE_KEY_W2_TRANSLATED
         localStorage.setItem(key, JSON.stringify(currentMenu))
         setSaved(true)
         setTimeout(() => setSaved(false), 2000)
     }
 
-    const handleReset = () => {
-        if (!window.confirm('Скинути тиждень до початкових даних?')) return
-        const defaults = weekNum === 1 ? week1Menu : week2Menu
-        const fresh = JSON.parse(JSON.stringify(defaults))
-        setCurrentMenu(fresh)
-        const key = weekNum === 1 ? STORAGE_KEY_W1 : STORAGE_KEY_W2
-        localStorage.removeItem(key)
-    }
-
     return (
-        <div>
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
+        <div className="max-w-6xl mx-auto">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
                 <div>
-                    <h1 className="text-3xl font-extrabold text-zinc-900 tracking-tight">
-                        Редактор <span className="text-transparent bg-clip-text bg-gradient-to-r from-brand-orange to-orange-400">Меню</span>
+                    <h1 className="text-3xl font-black text-zinc-900 tracking-tight">
+                        Редактор <span className="text-brand-orange">Меню</span>
                     </h1>
-                    <p className="text-zinc-500 mt-1">Змінюйте страви для кожного тижня та дня</p>
+                    <p className="text-zinc-500 mt-1">Керування мультиязичними стравами</p>
                 </div>
                 <div className="flex gap-3">
-                    <button
-                        onClick={handleReset}
-                        className="px-4 py-2.5 bg-white border border-zinc-200 rounded-xl shadow-sm hover:shadow-md text-sm font-semibold text-zinc-600 transition-all"
-                    >
-                        Скинути
-                    </button>
                     <motion.button
-                        whileHover={{ scale: 1.02 }}
-                        whileTap={{ scale: 0.98 }}
+                        whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
                         onClick={handleSave}
-                        className={`px-5 py-2.5 rounded-xl shadow-sm text-sm font-bold transition-all ${saved ? 'bg-green-500 text-white' : 'bg-brand-orange text-white hover:bg-orange-500'}`}
+                        className={`px-6 py-3 rounded-2xl shadow-lg shadow-brand-orange/20 text-sm font-bold transition-all ${saved ? 'bg-green-500 text-white' : 'bg-brand-orange text-white hover:bg-orange-500'}`}
                     >
-                        {saved ? '✓ Збережено!' : 'Зберегти'}
+                        {saved ? '✓ Збережено!' : 'Зберегти зміни'}
                     </motion.button>
                 </div>
             </div>
 
-            {/* Week selector */}
-            <div className="flex bg-white rounded-2xl p-1 shadow-sm border border-zinc-200 mb-6 w-fit">
-                {([1, 2] as const).map(w => (
-                    <button
-                        key={w}
-                        onClick={() => setWeekNum(w)}
-                        className={`px-6 py-2 rounded-xl font-bold text-sm transition-all ${weekNum === w ? 'bg-brand-orange text-white shadow-md' : 'text-zinc-500 hover:text-zinc-800'}`}
-                    >
-                        Тиждень {w}
-                    </button>
-                ))}
-            </div>
-
-            <div className="flex gap-6">
-                {/* Day list */}
-                <div className="flex flex-col gap-2 min-w-[100px]">
-                    {DAY_NAMES.map((name, idx) => (
-                        <button
-                            key={idx}
-                            onClick={() => setSelectedDay(idx)}
-                            className={`px-4 py-2.5 rounded-xl font-bold text-sm text-left transition-all ${selectedDay === idx ? 'bg-brand-orange text-white shadow-md' : 'bg-white border border-zinc-200 text-zinc-600 hover:border-zinc-400'}`}
-                        >
-                            {name}
-                        </button>
-                    ))}
-                </div>
-
-                {/* Dish editor */}
-                {currentDay && (
-                    <div className="flex-1 bg-white rounded-2xl border border-zinc-200 shadow-sm p-6">
-                        <h3 className="font-extrabold text-zinc-900 text-lg mb-5">
-                            {DAY_NAMES_FULL[selectedDay]}
-                            <span className="ml-2 text-sm font-medium text-zinc-400">Тиждень {weekNum}</span>
-                        </h3>
-                        <div className="space-y-4">
-                            {currentDay.dishes.map((dish: any, i: number) => (
-                                <div key={i}>
-                                    <label className="block text-xs font-bold text-zinc-500 uppercase tracking-widest mb-1.5">
-                                        {DISH_TYPE_LABELS[dish.type as keyof typeof DISH_TYPE_LABELS]}
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={dish.title}
-                                        onChange={e => handleDishChange(i, e.target.value)}
-                                        className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 text-zinc-900 font-medium focus:outline-none focus:ring-2 focus:ring-brand-orange/50 transition-all"
-                                        placeholder="Назва страви..."
-                                    />
-                                </div>
+            <div className="grid grid-cols-1 lg:grid-cols-[200px_1fr] gap-8">
+                {/* Left col: Week & Day sidebar */}
+                <div className="space-y-6">
+                    <div className="bg-white p-1.5 rounded-2xl shadow-sm border border-zinc-200">
+                        <div className="grid grid-cols-2 gap-1">
+                            {([1, 2] as const).map(w => (
+                                <button
+                                    key={w}
+                                    onClick={() => setWeekNum(w)}
+                                    className={`py-2 rounded-xl text-xs font-bold transition-all ${weekNum === w ? 'bg-zinc-900 text-white shadow-md' : 'text-zinc-500 hover:bg-zinc-100'}`}
+                                >
+                                    Тиждень {w}
+                                </button>
                             ))}
                         </div>
                     </div>
-                )}
+
+                    <div className="bg-white rounded-2xl border border-zinc-200 shadow-sm overflow-hidden">
+                        {DAY_NAMES.map((name, idx) => (
+                            <button
+                                key={idx}
+                                onClick={() => setSelectedDay(idx)}
+                                className={`w-full px-5 py-3.5 text-left font-bold text-sm transition-all border-b border-zinc-100 last:border-0 ${selectedDay === idx ? 'bg-brand-orange/10 text-brand-orange' : 'text-zinc-600 hover:bg-zinc-50'}`}
+                            >
+                                <span className="mr-3 text-xs opacity-40">{idx + 1}</span>
+                                {DAY_NAMES_FULL[idx]}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
+                {/* Right col: Dish Editor */}
+                <div className="bg-white rounded-3xl border border-zinc-200 shadow-sm overflow-hidden">
+                    <div className="bg-zinc-50 px-6 py-4 border-b border-zinc-200 flex flex-wrap items-center justify-between gap-4">
+                        <div className="flex items-center gap-3">
+                            {LANGUAGES.map(lang => (
+                                <button
+                                    key={lang.id}
+                                    onClick={() => setActiveLang(lang.id)}
+                                    className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all ${activeLang === lang.id ? 'bg-white border-zinc-300 shadow-sm text-zinc-900' : 'bg-transparent border-transparent text-zinc-400 hover:text-zinc-600'}`}
+                                >
+                                    <span>{lang.flag}</span>
+                                    <span>{lang.label}</span>
+                                </button>
+                            ))}
+                        </div>
+                        <div className="text-xs font-bold text-zinc-400 uppercase tracking-widest">
+                            {DAY_NAMES_FULL[selectedDay]} • Тиждень {weekNum}
+                        </div>
+                    </div>
+
+                    <div className="p-8 space-y-8">
+                        {currentDay.dishes.map((dish: any, i: number) => (
+                            <div key={i} className="group relative">
+                                <div className="flex items-center justify-between mb-2">
+                                    <label className="text-xs font-black text-zinc-400 uppercase tracking-[0.2em]">
+                                        {DISH_TYPE_LABELS[dish.type as keyof typeof DISH_TYPE_LABELS]}
+                                    </label>
+                                    <button 
+                                        onClick={() => autoTranslate(i)}
+                                        className="text-[10px] font-bold text-brand-orange hover:text-orange-600 uppercase tracking-wider flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                    >
+                                        <span>✨</span> Автоматичний переклад
+                                    </button>
+                                </div>
+                                <div className="relative">
+                                    <input
+                                        type="text"
+                                        value={dish.titles[activeLang]}
+                                        onChange={e => handleDishChange(i, activeLang, e.target.value)}
+                                        className="w-full bg-zinc-50 border-2 border-zinc-100 rounded-2xl px-5 py-4 text-zinc-900 font-bold focus:outline-none focus:border-brand-orange/30 focus:bg-white transition-all text-lg"
+                                        placeholder="Введіть назву страви..."
+                                    />
+                                    <div className="absolute right-4 top-1/2 -translate-y-1/2 text-xl opacity-30 pointer-events-none">
+                                        {LANGUAGES.find(l => l.id === activeLang)?.flag}
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
             </div>
         </div>
     )
@@ -174,7 +251,8 @@ export default function AdminPage() {
     const [isLoading, setIsLoading] = useState(false)
     const [isRefreshing, setIsRefreshing] = useState(false)
     const [activeSection, setActiveSection] = useState<SidebarSection>('orders')
-    const [isSidebarOpen, setIsSidebarOpen] = useState(false)
+    const [isSidebarOpen, setIsSidebarOpen] = useState(false) // for mobile
+    const [isCollapsed, setIsCollapsed] = useState(false) // for desktop
 
     useEffect(() => {
         if (error) setError('')
@@ -248,6 +326,11 @@ export default function AdminPage() {
         }
     }
 
+    const sidebarItems = [
+        { id: 'orders' as SidebarSection, label: 'Замовлення', icon: '📦', badge: orders.filter(o => o.status === 'New').length },
+        { id: 'menu' as SidebarSection, label: 'Меню', icon: '🍽️', badge: null },
+    ]
+
     // ─────────── Login Screen ───────────
     if (!isAuthenticated) {
         return (
@@ -316,21 +399,15 @@ export default function AdminPage() {
         )
     }
 
-    // ─────────── Admin Dashboard ───────────
-    const sidebarItems = [
-        { id: 'orders' as SidebarSection, label: 'Замовлення', icon: '📦', badge: orders.filter(o => o.status === 'New').length },
-        { id: 'menu' as SidebarSection, label: 'Меню', icon: '🍽️', badge: null },
-    ]
-
     return (
-        <div className="min-h-screen bg-zinc-50 font-sans flex">
-            {/* Sidebar mobile overlay */}
+        <div className="min-h-screen bg-zinc-50 font-sans flex overflow-x-hidden">
+            {/* Mobile Overlay */}
             <AnimatePresence>
                 {isSidebarOpen && (
                     <motion.div
                         initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
                         onClick={() => setIsSidebarOpen(false)}
-                        className="fixed inset-0 bg-black/40 z-40 lg:hidden"
+                        className="fixed inset-0 bg-black/60 z-[60] lg:hidden backdrop-blur-sm"
                     />
                 )}
             </AnimatePresence>
@@ -338,155 +415,153 @@ export default function AdminPage() {
             {/* Sidebar */}
             <motion.aside
                 initial={false}
-                animate={{ x: isSidebarOpen ? 0 : '-100%' }}
-                transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-                className="fixed top-0 left-0 h-full w-64 bg-zinc-950 z-50 flex flex-col lg:translate-x-0 lg:static lg:z-auto lg:animate-none"
-                style={{ transform: undefined }}
+                animate={{ 
+                    width: isCollapsed ? 84 : 280,
+                    x: isSidebarOpen ? 0 : (typeof window !== 'undefined' && window.innerWidth < 1024 ? -280 : 0)
+                }}
+                className={`fixed top-0 left-0 h-full bg-zinc-950 z-[70] flex flex-col transition-all border-r border-white/5 lg:translate-x-0 lg:static`}
             >
-                <div className="lg:hidden">
-                    <motion.aside
-                        className="fixed top-0 left-0 h-full w-64 bg-zinc-950 z-50 flex flex-col"
-                        initial={{ x: '-100%' }}
-                        animate={{ x: isSidebarOpen ? 0 : '-100%' }}
-                        transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-                    >
-                        <SidebarContent
-                            items={sidebarItems}
-                            activeSection={activeSection}
-                            onSelect={(s) => { setActiveSection(s); setIsSidebarOpen(false) }}
-                            onClose={() => setIsSidebarOpen(false)}
-                        />
-                    </motion.aside>
-                </div>
-                <div className="hidden lg:flex flex-col h-full">
-                    <SidebarContent
-                        items={sidebarItems}
-                        activeSection={activeSection}
-                        onSelect={(s) => setActiveSection(s)}
-                    />
+                <div className="flex flex-col h-full py-6">
+                    {/* Header */}
+                    <div className="px-6 mb-10 flex items-center justify-between overflow-hidden">
+                        <AnimatePresence mode="wait">
+                            {!isCollapsed && (
+                                <motion.div
+                                    initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }}
+                                    className="whitespace-nowrap"
+                                >
+                                    <div className="text-white font-black text-2xl tracking-tighter">GoodLunch</div>
+                                    <div className="text-zinc-500 text-[10px] font-bold uppercase tracking-widest mt-0.5">Адмін панель</div>
+                                </motion.div>
+                            )}
+                            {isCollapsed && (
+                                <motion.div 
+                                    initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }}
+                                    className="w-10 h-10 bg-brand-orange rounded-xl flex items-center justify-center text-white font-black text-xl"
+                                >
+                                    G
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+                        
+                        {/* Collapse Toggle (Desktop) */}
+                        <button 
+                            onClick={() => setIsCollapsed(!isCollapsed)}
+                            className="hidden lg:flex w-8 h-8 items-center justify-center rounded-lg hover:bg-white/10 text-zinc-500 hover:text-white transition-colors ml-4"
+                        >
+                            <svg className={`w-5 h-5 transition-transform duration-300 ${isCollapsed ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+                            </svg>
+                        </button>
+                    </div>
+
+                    {/* Nav */}
+                    <nav className="flex-1 px-4 space-y-2">
+                        {sidebarItems.map(item => (
+                            <button
+                                key={item.id}
+                                onClick={() => { setActiveSection(item.id); setIsSidebarOpen(false) }}
+                                className={`w-full flex items-center gap-4 px-4 py-3.5 rounded-2xl text-sm font-bold transition-all relative group ${activeSection === item.id
+                                    ? 'bg-brand-orange text-white shadow-xl shadow-brand-orange/30'
+                                    : 'text-zinc-500 hover:bg-white/5 hover:text-white'
+                                    }`}
+                            >
+                                <span className={`text-2xl transition-transform duration-300 ${activeSection === item.id ? 'scale-110' : 'group-hover:scale-110'}`}>{item.icon}</span>
+                                <AnimatePresence>
+                                    {!isCollapsed && (
+                                        <motion.span
+                                            initial={{ opacity: 0, width: 0 }} animate={{ opacity: 1, width: 'auto' }} exit={{ opacity: 0, width: 0 }}
+                                            className="flex-1 text-left whitespace-nowrap"
+                                        >
+                                            {item.label}
+                                        </motion.span>
+                                    )}
+                                </AnimatePresence>
+                                
+                                {item.badge !== null && item.badge > 0 && (
+                                    <span className={`min-w-[20px] h-5 flex items-center justify-center text-[10px] font-black rounded-full ${activeSection === item.id ? 'bg-white/20 text-white' : 'bg-brand-orange text-white'}`}>
+                                        {item.badge}
+                                    </span>
+                                )}
+
+                                {/* Hover tooltip for collapsed state */}
+                                {isCollapsed && (
+                                    <div className="absolute left-[calc(100%+12px)] top-1/2 -translate-y-1/2 bg-zinc-800 text-white text-[10px] font-black px-2.5 py-1.5 rounded-lg opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity whitespace-nowrap z-[100] shadow-xl border border-white/5 uppercase tracking-widest">
+                                        {item.label}
+                                    </div>
+                                )}
+                            </button>
+                        ))}
+                    </nav>
+
+                    {/* Footer */}
+                    <div className="px-6 mt-auto">
+                        <div className={`text-zinc-700 text-[10px] font-bold uppercase tracking-widest whitespace-nowrap overflow-hidden transition-all ${isCollapsed ? 'opacity-0' : 'opacity-100'}`}>
+                            © 2026 Admin
+                        </div>
+                    </div>
                 </div>
             </motion.aside>
-
-            {/* Static sidebar for desktop */}
-            <aside className="hidden lg:flex w-64 flex-shrink-0 bg-zinc-950 flex-col min-h-screen">
-                <SidebarContent
-                    items={sidebarItems}
-                    activeSection={activeSection}
-                    onSelect={(s) => setActiveSection(s)}
-                />
-            </aside>
 
             {/* Main content */}
             <div className="flex-1 flex flex-col min-w-0">
                 {/* Top bar */}
-                <header className="bg-white border-b border-zinc-200 px-6 py-4 flex items-center gap-4 sticky top-0 z-30">
+                <header className="bg-white/80 backdrop-blur-md border-b border-zinc-200 px-6 py-5 flex items-center gap-4 sticky top-0 z-50">
                     <button
                         onClick={() => setIsSidebarOpen(true)}
-                        className="lg:hidden p-2 rounded-lg hover:bg-zinc-100 text-zinc-600"
+                        className="lg:hidden p-2.5 rounded-xl bg-zinc-100 text-zinc-600 hover:bg-zinc-200 transition-colors"
                     >
                         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
                         </svg>
                     </button>
-                    <div className="flex-1">
-                        <span className="font-extrabold text-zinc-900 text-lg">GoodLunch</span>
-                        <span className="ml-2 text-zinc-400 text-sm">Admin</span>
+                    
+                    <div className="flex-1 flex items-center gap-3">
+                        <div className="hidden lg:block h-6 w-[1px] bg-zinc-200 mr-2" />
+                        <h2 className="text-xl font-bold text-zinc-900 tracking-tight">
+                            {sidebarItems.find(i => i.id === activeSection)?.label}
+                        </h2>
                     </div>
-                    {activeSection === 'orders' && (
-                        <button
-                            onClick={() => fetchOrders()}
-                            disabled={isRefreshing}
-                            className="px-4 py-2 bg-white border border-zinc-200 rounded-xl shadow-sm hover:shadow-md text-sm font-semibold text-zinc-700 transition-all flex items-center gap-2 disabled:opacity-75"
-                        >
-                            <svg className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                            </svg>
-                            Оновити
-                        </button>
-                    )}
+
+                    <div className="flex items-center gap-3">
+                        {activeSection === 'orders' && (
+                            <button
+                                onClick={() => fetchOrders()}
+                                disabled={isRefreshing}
+                                className="px-4 py-2 bg-white border border-zinc-200 rounded-xl shadow-sm hover:border-zinc-300 text-sm font-bold text-zinc-700 transition-all flex items-center gap-2 disabled:opacity-75 group active:scale-95"
+                            >
+                                <svg className={`w-4 h-4 text-zinc-400 group-hover:text-brand-orange transition-colors ${isRefreshing ? 'animate-spin text-brand-orange' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                </svg>
+                                <span className="hidden sm:inline">Оновити</span>
+                            </button>
+                        )}
+                        <div className="w-10 h-10 rounded-xl bg-zinc-100 border border-zinc-200 flex items-center justify-center text-zinc-500 font-bold text-xs select-none">
+                            YU
+                        </div>
+                    </div>
                 </header>
 
                 {/* Page content */}
-                <main className="p-4 md:p-8 flex-1">
+                <main className="p-6 md:p-10 flex-1">
                     <AnimatePresence mode="wait">
-                        {activeSection === 'orders' ? (
-                            <motion.div
-                                key="orders"
-                                initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-                                exit={{ opacity: 0, y: -10 }}
-                            >
+                        <motion.div
+                            key={activeSection}
+                            initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -20 }}
+                            transition={{ duration: 0.3, ease: [0.23, 1, 0.32, 1] }}
+                        >
+                            {activeSection === 'orders' ? (
                                 <OrdersSection orders={orders} onDelete={deleteOrder} onUpdateStatus={updateStatus} />
-                            </motion.div>
-                        ) : (
-                            <motion.div
-                                key="menu"
-                                initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-                                exit={{ opacity: 0, y: -10 }}
-                            >
+                            ) : (
                                 <MenuEditorSection />
-                            </motion.div>
-                        )}
+                            )}
+                        </motion.div>
                     </AnimatePresence>
                 </main>
             </div>
 
             <style dangerouslySetInnerHTML={{ __html: `@keyframes shimmer { 100% { transform: translateX(100%); } }` }} />
-        </div>
-    )
-}
-
-// ─────────────────── Sidebar Content ───────────────────
-function SidebarContent({
-    items,
-    activeSection,
-    onSelect,
-    onClose,
-}: {
-    items: { id: SidebarSection; label: string; icon: string; badge: number | null }[]
-    activeSection: SidebarSection
-    onSelect: (s: SidebarSection) => void
-    onClose?: () => void
-}) {
-    return (
-        <div className="flex flex-col h-full py-4">
-            <div className="px-4 mb-8 flex items-center justify-between">
-                <div>
-                    <div className="text-white font-extrabold text-xl tracking-tight">GoodLunch</div>
-                    <div className="text-zinc-500 text-xs mt-0.5">Адмін панель</div>
-                </div>
-                {onClose && (
-                    <button onClick={onClose} className="text-zinc-400 hover:text-white p-1">
-                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                    </button>
-                )}
-            </div>
-
-            <nav className="flex-1 px-2 space-y-1">
-                {items.map(item => (
-                    <button
-                        key={item.id}
-                        onClick={() => onSelect(item.id)}
-                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-all group ${activeSection === item.id
-                            ? 'bg-brand-orange text-white shadow-lg shadow-brand-orange/30'
-                            : 'text-zinc-400 hover:bg-white/10 hover:text-white'
-                            }`}
-                    >
-                        <span className="text-xl">{item.icon}</span>
-                        <span className="flex-1 text-left">{item.label}</span>
-                        {item.badge !== null && item.badge > 0 && (
-                            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${activeSection === item.id ? 'bg-white/20 text-white' : 'bg-brand-orange/30 text-brand-orange'}`}>
-                                {item.badge}
-                            </span>
-                        )}
-                    </button>
-                ))}
-            </nav>
-
-            <div className="px-4 mt-4 border-t border-zinc-800 pt-4">
-                <div className="text-zinc-600 text-xs text-center">GoodLunch Admin © 2026</div>
-            </div>
         </div>
     )
 }
@@ -502,121 +577,114 @@ function OrdersSection({
     onUpdateStatus: (id: string, status: string) => void
 }) {
     return (
-        <div>
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
-                <div>
-                    <h1 className="text-3xl font-extrabold text-zinc-900 tracking-tight">
-                        Замовлення <span className="text-transparent bg-clip-text bg-gradient-to-r from-brand-orange to-orange-400">GoodLunch</span>
-                    </h1>
-                    <p className="text-zinc-500 mt-1">Керування запитами клієнтів</p>
-                </div>
-            </div>
-
+        <div className="max-w-[1600px] mx-auto">
             {/* Stats */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
                 {[
-                    { label: 'Всього', value: orders.length, color: '' },
-                    { label: 'Нові', value: orders.filter(o => o.status === 'New').length, color: 'border-t-4 border-t-blue-500' },
-                    { label: 'Оплачено', value: orders.filter(o => o.status === 'Paid').length, color: 'border-t-4 border-t-green-500' },
-                    { label: 'В процесі', value: orders.filter(o => o.status === 'In Progress').length, color: 'border-t-4 border-t-orange-500' },
+                    { label: 'Всього', value: orders.length, color: 'text-zinc-900', bg: 'bg-white', icon: '📊' },
+                    { label: 'Нові', value: orders.filter(o => o.status === 'New').length, color: 'text-blue-600', bg: 'bg-blue-50/50', icon: '✨' },
+                    { label: 'Оплачено', value: orders.filter(o => o.status === 'Paid').length, color: 'text-green-600', bg: 'bg-green-50/50', icon: '✅' },
+                    { label: 'В процесі', value: orders.filter(o => o.status === 'In Progress').length, color: 'text-orange-600', bg: 'bg-orange-50/50', icon: '🔥' },
                 ].map(s => (
-                    <div key={s.label} className={`bg-white p-5 rounded-2xl border border-zinc-100 shadow-sm ${s.color}`}>
-                        <p className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-1">{s.label}</p>
-                        <p className="text-4xl font-extrabold text-zinc-900">{s.value}</p>
+                    <div key={s.label} className={`p-6 rounded-3xl border border-zinc-200 shadow-sm ${s.bg}`}>
+                        <div className="flex justify-between items-start mb-4">
+                            <span className="text-xl">{s.icon}</span>
+                        </div>
+                        <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1">{s.label}</p>
+                        <p className={`text-4xl font-black ${s.color}`}>{s.value}</p>
                     </div>
                 ))}
             </div>
 
-            {/* Table */}
-            <div className="bg-white shadow-xl shadow-zinc-200/40 border border-zinc-200 rounded-2xl overflow-hidden">
+            {/* Table Card */}
+            <div className="bg-white shadow-2xl shadow-zinc-200/50 border border-zinc-200 rounded-[2.5rem] overflow-hidden">
                 <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-zinc-200 text-sm">
-                        <thead className="bg-zinc-50/80">
-                            <tr>
+                    <table className="min-w-full divide-y divide-zinc-200">
+                        <thead>
+                            <tr className="bg-zinc-50 border-b border-zinc-100">
                                 {['Дата', 'Клієнт', 'Адреса', 'Замовлення', 'Мова', 'Статус', 'Дії'].map(h => (
-                                    <th key={h} className="px-5 py-4 text-left text-xs font-bold text-zinc-500 uppercase tracking-widest">{h}</th>
+                                    <th key={h} className="px-6 py-5 text-left text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em]">{h}</th>
                                 ))}
                             </tr>
                         </thead>
-                        <tbody className="bg-white divide-y divide-zinc-100">
+                        <tbody className="divide-y divide-zinc-100">
                             {orders.map((order: any, idx) => (
                                 <motion.tr
-                                    initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-                                    transition={{ delay: idx * 0.04 }}
+                                    initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                                    transition={{ delay: idx * 0.05 }}
                                     key={order.id}
-                                    className="hover:bg-zinc-50/80 transition-colors"
+                                    className="group hover:bg-zinc-50/50 transition-colors"
                                 >
-                                    <td className="px-5 py-4 whitespace-nowrap">
-                                        <div className="font-medium text-zinc-900">{new Date(order.createdAt).toLocaleDateString('uk-UA')}</div>
-                                        <div className="text-zinc-400 text-xs">{new Date(order.createdAt).toLocaleTimeString('uk-UA')}</div>
+                                    <td className="px-6 py-6 whitespace-nowrap">
+                                        <div className="font-bold text-zinc-900 text-sm">{new Date(order.createdAt).toLocaleDateString('uk-UA')}</div>
+                                        <div className="text-zinc-400 text-[10px] font-bold uppercase tracking-wider mt-1">{new Date(order.createdAt).toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' })}</div>
                                     </td>
-                                    <td className="px-5 py-4">
-                                        <div className="font-bold text-zinc-900">{order.name || 'Без імені'}</div>
-                                        <div className="text-zinc-600 font-medium">{order.phone}</div>
-                                        <div className="mt-1.5 inline-flex items-center px-2 py-0.5 rounded-md bg-zinc-100 border border-zinc-200 text-zinc-600 text-xs font-bold capitalize">
-                                            <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${order.messenger === 'telegram' ? 'bg-blue-400' : order.messenger === 'whatsapp' ? 'bg-green-500' : 'bg-purple-500'}`}></span>
-                                            {order.messenger || 'N/A'}
-                                        </div>
-                                    </td>
-                                    <td className="px-5 py-4">
-                                        <div className="text-zinc-800 font-medium">
-                                            <span className="text-zinc-400">Вул:</span> {order.street || '-'} <span className="text-zinc-400">Дім:</span> {order.house || '-'}
-                                        </div>
-                                        <div className="text-zinc-500 text-xs mt-1">
-                                            <span className="text-zinc-400">Кв:</span> {order.apt || '-'}, <span className="text-zinc-400">Пов:</span> {order.floor || '-'}
-                                        </div>
-                                        <div className="mt-1.5 text-xs font-bold text-brand-orange bg-orange-50 inline-block px-2 py-0.5 rounded">
-                                            {order.deliveryDay === 'tomorrow' ? '📅 Завтра' : '📅 Післязавтра'}
-                                        </div>
-                                    </td>
-                                    <td className="px-5 py-4">
-                                        <div className="inline-flex gap-1.5 items-center mb-1">
-                                            <span className="bg-orange-100 text-orange-800 border border-orange-200 px-2 py-0.5 rounded-lg text-xs font-bold">
-                                                {order.package === 'meals3' ? '3 Страви' : '4 Страви'}
-                                            </span>
-                                            <span className="text-zinc-600 bg-zinc-100 px-2 py-0.5 rounded-lg text-xs font-semibold">
-                                                {order.calories} kcal
+                                    <td className="px-6 py-6">
+                                        <div className="font-black text-zinc-900 text-base leading-tight mb-1">{order.name || 'Анонім'}</div>
+                                        <div className="text-zinc-500 font-bold text-sm tracking-tight">{order.phone}</div>
+                                        <div className="mt-2 flex">
+                                            <span className={`px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-widest border ${order.messenger === 'telegram' ? 'bg-blue-50 text-blue-600 border-blue-100' : order.messenger === 'whatsapp' ? 'bg-green-50 text-green-600 border-green-100' : 'bg-zinc-50 text-zinc-600 border-zinc-100'}`}>
+                                                {order.messenger || 'no messenger'}
                                             </span>
                                         </div>
-                                        <div className="text-zinc-900 font-extrabold text-base mt-1">
-                                            {order.price || '0'} <span className="text-zinc-400 text-sm font-medium">zł</span>
+                                    </td>
+                                    <td className="px-6 py-6">
+                                        <div className="text-zinc-800 text-sm font-bold leading-relaxed max-w-[200px]">
+                                            Вул. {order.street || '-'}, будинок {order.house || '-'}
+                                        </div>
+                                        <div className="text-zinc-400 text-[11px] font-semibold mt-1">
+                                            кв. {order.apt || '-'}, пов. {order.floor || '-'}
+                                        </div>
+                                        <div className="mt-2 inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-indigo-50 text-indigo-600 text-[10px] font-black border border-indigo-100 uppercase tracking-wider">
+                                            {order.deliveryDay === 'tomorrow' ? '📦 Завтра' : '📦 Післязавтра'}
                                         </div>
                                     </td>
-                                    <td className="px-5 py-4 whitespace-nowrap">
-                                        <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-bold ${LANG_COLORS[order.lang || 'unknown']}`}>
-                                            <span>{LANG_FLAGS[order.lang || 'unknown']}</span>
-                                            <span className="uppercase">{order.lang || '?'}</span>
+                                    <td className="px-6 py-6">
+                                        <div className="flex flex-col gap-1.5">
+                                            <div className="flex items-center gap-1.5">
+                                                <span className="w-2 h-2 rounded-full bg-brand-orange"></span>
+                                                <span className="text-zinc-900 font-black text-sm">{order.package === 'meals3' ? '3 Страви' : '4 Страви'}</span>
+                                            </div>
+                                            <div className="px-2 py-0.5 rounded-md bg-zinc-100 text-zinc-600 text-[10px] font-black w-fit uppercase tracking-tighter">
+                                                {order.calories} kcal • {order.price} zł
+                                            </div>
                                         </div>
                                     </td>
-                                    <td className="px-5 py-4 whitespace-nowrap">
-                                        <div className="relative">
+                                    <td className="px-6 py-6 whitespace-nowrap">
+                                        <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-2xl border text-[10px] font-black uppercase tracking-widest ${LANG_COLORS[order.lang || 'unknown']}`}>
+                                            <span className="text-sm grayscale-0">{LANG_FLAGS[order.lang || 'unknown']}</span>
+                                            <span>{order.lang || '?'}</span>
+                                        </div>
+                                    </td>
+                                    <td className="px-6 py-6 whitespace-nowrap">
+                                        <div className="relative group/select">
                                             <select
                                                 value={order.status}
                                                 onChange={(e) => onUpdateStatus(order.id, e.target.value)}
-                                                className={`appearance-none block w-full pl-3 pr-8 py-2 text-sm font-bold outline-none ring-1 ring-inset focus:ring-2 focus:ring-brand-orange rounded-xl transition-all cursor-pointer
+                                                className={`appearance-none block w-full pl-4 pr-10 py-2.5 text-xs font-black uppercase tracking-[0.1em] outline-none ring-2 ring-inset focus:ring-brand-orange/50 rounded-2xl transition-all cursor-pointer shadow-sm
                                                     ${order.status === 'New' ? 'text-blue-700 bg-blue-50 ring-blue-200' :
                                                     order.status === 'Paid' ? 'text-green-700 bg-green-50 ring-green-200' :
                                                     order.status === 'No Answer' ? 'text-red-700 bg-red-50 ring-red-200' :
-                                                    order.status === 'Cancelled' ? 'text-zinc-600 bg-zinc-100 ring-zinc-200' :
+                                                    order.status === 'Cancelled' ? 'text-zinc-500 bg-zinc-100 ring-zinc-200' :
                                                     'text-orange-700 bg-orange-50 ring-orange-200'}`}
                                             >
                                                 <option value="New">Новий</option>
                                                 <option value="In Progress">В процесі</option>
-                                                <option value="Paid">Оплачено/Діє</option>
+                                                <option value="Paid">Оплачено</option>
                                                 <option value="No Answer">Немає відповіді</option>
                                                 <option value="Cancelled">Скасовано</option>
                                             </select>
-                                            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-zinc-500">
-                                                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-zinc-400 group-hover/select:text-zinc-600">
+                                                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
                                                 </svg>
                                             </div>
                                         </div>
                                     </td>
-                                    <td className="px-5 py-4 whitespace-nowrap">
+                                    <td className="px-6 py-6 whitespace-nowrap">
                                         <button
                                             onClick={() => onDelete(order.id)}
-                                            className="p-2 text-red-400 hover:bg-red-50 rounded-lg transition-colors"
+                                            className="w-10 h-10 flex items-center justify-center text-zinc-300 hover:text-red-500 hover:bg-red-50 rounded-2xl transition-all active:scale-90"
                                             title="Видалити"
                                         >
                                             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -626,18 +694,6 @@ function OrdersSection({
                                     </td>
                                 </motion.tr>
                             ))}
-                            {orders.length === 0 && (
-                                <tr>
-                                    <td colSpan={7} className="px-6 py-20 text-center">
-                                        <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-zinc-100 mb-4">
-                                            <svg className="w-8 h-8 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
-                                            </svg>
-                                        </div>
-                                        <p className="text-zinc-500 font-medium">Наразі немає активних замовлень.</p>
-                                    </td>
-                                </tr>
-                            )}
                         </tbody>
                     </table>
                 </div>

@@ -88,6 +88,7 @@ export const dictionary = {
       result_comment: "To jest Twoje idealne dzienne zapotrzebowanie kaloryczne. Dobrałem dla Ciebie najbliższy dostępny plan.",
       select_btn: "Wybieram tę kaloryczność",
       back_btn: "Powrót",
+      result_plan_label: "Najlepszy plan dla Ciebie",
     },
     reviews: {
       title: "Wrocław już z nami je",
@@ -214,6 +215,7 @@ export const dictionary = {
       result_comment: "Це ваша ідеальна добова норма калорій на день. Ми підібрали для вас найближчий доступний план.",
       select_btn: "Вибираю цю калорійність",
       back_btn: "Назад",
+      result_plan_label: "Найкращий план для вас",
     },
     reviews: {
       title: "Вроцлав вже їсть з нами",
@@ -340,6 +342,7 @@ export const dictionary = {
       result_comment: "Это ваша идеальная суточная норма калорий. Мы подобрали для вас ближайший доступный план.",
       select_btn: "Выбираю эту калорийность",
       back_btn: "Назад",
+      result_plan_label: "Лучший план для вас",
     },
     reviews: {
       title: "Вроцлав уже ест с нами",
@@ -466,6 +469,7 @@ export const dictionary = {
       result_comment: "This is your ideal daily calorie norm. We've matched you with the closest available plan.",
       select_btn: "Select this calorie plan",
       back_btn: "Back",
+      result_plan_label: "Best plan for you",
     },
     reviews: {
       title: "Wroclaw eats with us",

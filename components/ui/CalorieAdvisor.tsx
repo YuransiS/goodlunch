@@ -22,31 +22,33 @@ const ACTIVITY_ICONS: Record<ActivityLevel, string> = {
   5: '🏆'
 }
 
-function findClosestTier(tdee: number, pkg: 'meals3' | 'meals4'): number {
-  const options = PRICING[pkg]
-  let closest = options[0]
-  let minDiff = Math.abs(tdee - options[0].value)
-  for (const opt of options) {
-    const diff = Math.abs(tdee - opt.value)
-    if (diff < minDiff) {
-      minDiff = diff
-      closest = opt
+function findBestOption(tdee: number): { pkg: 'meals3' | 'meals4'; calories: number } {
+  let bestPkg: 'meals3' | 'meals4' = 'meals3'
+  let bestCalories = PRICING.meals3[0].value
+  let bestDiff = Infinity
+
+  for (const pkg of ['meals3', 'meals4'] as const) {
+    for (const opt of PRICING[pkg]) {
+      const diff = Math.abs(tdee - opt.value)
+      if (diff < bestDiff) {
+        bestDiff = diff
+        bestPkg = pkg
+        bestCalories = opt.value
+      }
     }
   }
-  return closest.value
+  return { pkg: bestPkg, calories: bestCalories }
 }
 
 export function CalorieAdvisor({
   isOpen,
   onCloseAction,
-  onSelectCaloriesAction,
-  mealPackage,
+  onSelectPackageAndCaloriesAction,
   dict
 }: {
   isOpen: boolean
   onCloseAction: () => void
-  onSelectCaloriesAction: (calories: number) => void
-  mealPackage: 'meals3' | 'meals4'
+  onSelectPackageAndCaloriesAction: (pkg: 'meals3' | 'meals4', calories: number) => void
   dict: any
 }) {
   const [gender, setGender] = useState<Gender>('male')
@@ -55,7 +57,7 @@ export function CalorieAdvisor({
   const [weight, setWeight] = useState('')
   const [activity, setActivity] = useState<ActivityLevel>(2)
   const [result, setResult] = useState<number | null>(null)
-  const [suggestedCalories, setSuggestedCalories] = useState<number | null>(null)
+  const [suggestion, setSuggestion] = useState<{ pkg: 'meals3' | 'meals4'; calories: number } | null>(null)
 
   const a = dict.advisor
 
@@ -74,21 +76,21 @@ export function CalorieAdvisor({
     }
 
     const tdee = Math.round(bmr * ACTIVITY_MULTIPLIERS[activity])
-    const closest = findClosestTier(tdee, mealPackage)
+    const best = findBestOption(tdee)
     setResult(tdee)
-    setSuggestedCalories(closest)
+    setSuggestion(best)
   }
 
   const handleSelect = () => {
-    if (suggestedCalories) {
-      onSelectCaloriesAction(suggestedCalories)
+    if (suggestion) {
+      onSelectPackageAndCaloriesAction(suggestion.pkg, suggestion.calories)
       onCloseAction()
     }
   }
 
   const handleClose = () => {
     setResult(null)
-    setSuggestedCalories(null)
+    setSuggestion(null)
     onCloseAction()
   }
 
@@ -243,10 +245,13 @@ export function CalorieAdvisor({
                     <div className="text-5xl font-extrabold text-brand-orange mb-1">
                       {result} <span className="text-2xl text-gray-400">kcal</span>
                     </div>
-                    {suggestedCalories && (
-                      <div className="mt-2 mb-4 inline-flex items-center gap-2 bg-orange-50 border border-orange-200 rounded-xl px-4 py-2">
-                        <span className="text-xs text-gray-500">Нearestt plan:</span>
-                        <span className="font-extrabold text-brand-orange">{suggestedCalories} kcal</span>
+                    {suggestion && (
+                      <div className="mt-2 mb-4 inline-flex flex-col items-center gap-1 bg-orange-50 border border-orange-200 rounded-xl px-4 py-3">
+                        <span className="text-xs text-gray-500">{a.result_plan_label || 'Найкращий план'}:</span>
+                        <span className="font-extrabold text-brand-orange text-lg">{suggestion.calories} kcal</span>
+                        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">
+                          {suggestion.pkg === 'meals3' ? '3 страви' : '4 страви'}
+                        </span>
                       </div>
                     )}
                     <p className="text-gray-500 text-sm px-2 mb-6">{a.result_comment}</p>

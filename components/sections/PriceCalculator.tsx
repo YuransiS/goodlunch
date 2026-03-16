@@ -29,7 +29,8 @@ export default function PriceCalculator({ dict, lang }: { dict: any; lang?: stri
   const fullPrice = currentTier.price.toFixed(2)
   const trialPrice = (currentTier.price * (1 - PRICING.trialDiscount)).toFixed(2)
 
-  const handleAdvisorSelect = (selectedCalories: number) => {
+  const handleAdvisorSelectPackageAndCalories = (pkg: 'meals3' | 'meals4', selectedCalories: number) => {
+    setMealPackage(pkg)
     setCalories(selectedCalories)
   }
 
@@ -151,8 +152,7 @@ export default function PriceCalculator({ dict, lang }: { dict: any; lang?: stri
       <CalorieAdvisor
         isOpen={isAdvisorOpen}
         onCloseAction={() => setIsAdvisorOpen(false)}
-        onSelectCaloriesAction={handleAdvisorSelect}
-        mealPackage={mealPackage}
+        onSelectPackageAndCaloriesAction={handleAdvisorSelectPackageAndCalories}
         dict={dict}
       />
     </section>
